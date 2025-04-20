@@ -1,3 +1,5 @@
+from playwright.async_api import async_playwright
+
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
@@ -53,7 +55,7 @@ config = {
         "HoroscopeDescriptionTextColor": "rgba(255,255,255,1)",
         "DashedboxThickn": 5,
         "Dashedboxcolor": "rgba(255, 255, 255, 0.5)",
-        "fontPath": os.path.join(plugin_dirname, "/font/lite.ttf")
+        "fontPath": os.path.join(plugin_dirname, "font/lite.ttf")
     },
     "enablecurrency": False,
     "currency": "jrys",
@@ -457,7 +459,19 @@ def generate_fortune_html(user_id: str, avatar_url: str = "https://q1.qlogo.cn/g
         </html>
         """
 
+async def render_html_to_image(content, user_id = "11111"):
+    """将HTML内容渲染为图片"""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
 
+        # 加载HTML内容
+        await page.set_content(content)
+        save_path = path=os.path.join(data_dir,f"{user_id}_{get_formatted_date()}.png")
+        # 截图并保存
+        await page.screenshot(path = save_path, full_page=True)
+        await browser.close()
+    return save_path
 
 @register("jrys",
           "tinker",
@@ -480,14 +494,30 @@ class MyPlugin(Star):
     async def jrys(self, event: AstrMessageEvent):
         """ 今日运势 """
         logger.info("收到今日运势请求")
-        yield event.make_result().message("正在分析你的运势哦~请稍等~~")
-        # 获取用户ID 和 头像
-        user_id = event.get_sender_id()
-        avatar = f"https://q4.qlogo.cn/headimg_dl?dst_uin={user_id}&spec=640"
-        # 生成HTML
-        html = generate_fortune_html(user_id, avatar)
-        # 截图并发送
-        url = await self.html_render(html, {})
-        # 发送图片
-        yield event.make_result().url_image(url)
-        logger.info("今日运势请求处理完成")
+        try:
+            yield event.make_result().message("正在分析你的运势哦~请稍等~~")
+            # 获取用户ID 和 头像
+            user_id = event.get_sender_id()
+            avatar = f"https://q4.qlogo.cn/headimg_dl?dst_uin={user_id}&spec=640"
+            # 在json_file_path 中查找是否存在该用户的今日的运势图，如果存在则直接使用， 不存在则生成新的
+            with open(json_file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                today_date = get_formatted_date()
+                existing_data = [entry for entry in data if entry["user_id"] == user_id and entry["date"] == today_date]
+                if existing_data:
+                    # 如果存在，直接使用
+                    url = existing_data[0]["url"]
+                    logger.info(f"找到已有的运势图: {url}")
+                    # 发送图片
+                    yield event.make_result().url_image(url)
+                else:
+                    # 如果不存在，生成新的
+                    url = await render_html_to_image(generate_fortune_html(user_id, avatar), user_id)
+                    # 将新数据添加到列表中
+                    data.append({"user_id": user_id, "date": today_date, "url": url})
+                    with open(json_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False, indent=4)
+            logger.info("今日运势请求处理完成")
+        except Exception as e:
+            logger.error(f"处理今日运势请求时出错: {e}")
+            yield event.make_result().message("生成运势卡片时出错，请稍后再试。")
