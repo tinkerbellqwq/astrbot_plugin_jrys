@@ -509,7 +509,7 @@ class MyPlugin(Star):
                     url = existing_data[0]["url"]
                     logger.info(f"找到已有的运势图: {url}")
                     # 发送图片
-                    yield event.make_result().url_image(url)
+                    yield event.make_result().file_image(url)
                 else:
                     # 如果不存在，生成新的
                     url = await render_html_to_image(generate_fortune_html(user_id, avatar), user_id)
