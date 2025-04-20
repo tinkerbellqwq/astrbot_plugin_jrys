@@ -235,7 +235,7 @@ def get_formatted_date() -> str:
     month_str = f"0{month}" if month < 10 else str(month)
     day_str = f"0{day}" if day < 10 else str(day)
 
-    return f"{year}/{month_str}/{day_str}"
+    return f"{year}-{month_str}-{day_str}"
 
 def generate_fortune_html(user_id: str, avatar_url: str = "https://q1.qlogo.cn/g?b=qq&nk=10001&s=640") -> str:
     """生成今日运势HTML"""
