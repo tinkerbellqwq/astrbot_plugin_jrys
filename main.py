@@ -480,7 +480,7 @@ class MyPlugin(Star):
     async def jrys(self, event: AstrMessageEvent):
         """ 今日运势 """
         logger.info("收到今日运势请求")
-        yield event.chain_result("正在分析你的运势哦~请稍等~~")
+        yield event.make_result().message("正在分析你的运势哦~请稍等~~")
         # 获取用户ID 和 头像
         user_id = event.get_sender_id()
         avatar = f"https://q4.qlogo.cn/headimg_dl?dst_uin={user_id}&spec=640"
