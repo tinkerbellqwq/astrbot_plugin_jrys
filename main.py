@@ -418,29 +418,6 @@ def generate_fortune_html(user_id: str, avatar_url: str = "https://q1.qlogo.cn/g
             </div>
         </div>
         </div>
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {{
-            console.log('DOM完全加载');
-        }});
-        window.onload = function() {{
-            console.log('页面完全加载，包括所有资源');
-        }};
-        // 检测背景图片加载情况
-        (function() {{
-            var bgImg = new Image();
-            bgImg.onload = function() {{ 
-                console.log('背景图片加载成功'); 
-                document.querySelector('.debug-info').textContent += ' | 背景图加载成功';
-            }};
-            bgImg.onerror = function() {{ 
-                console.log('背景图片加载失败'); 
-                document.querySelector('.debug-info').textContent += ' | 背景图加载失败';
-                // 尝试使用备用背景
-                document.querySelector('.background').style.backgroundColor = '#333';
-            }};
-            bgImg.src = '{background_url_base64}';
-        }})();
-        </script>
         </body>
         </html>
         """
@@ -473,6 +450,37 @@ async def render_html_to_image(content, user_id = "11111"):
         await browser.close()
     return save_path
 
+# 修改JSON文件的保存逻辑
+def save_user_fortune_data(user_id, image_path):
+    today_date = get_formatted_date()
+    new_entry = {
+        "user_id": user_id,
+        "date": today_date,
+        "url": image_path
+    }
+
+    try:
+        # 读取现有数据
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            try:
+                data = json.load(f)
+                if not isinstance(data, list):
+                    data = []
+            except json.JSONDecodeError:
+                data = []
+
+        # 添加新条目
+        data.append(new_entry)
+
+        # 写回文件
+        with open(json_file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+        return True
+    except Exception as e:
+        logger.error(f"保存用户运势数据时出错: {e}")
+        return False
+
 @register("jrys",
           "tinker",
           "精美的jrys图",
@@ -496,28 +504,40 @@ class MyPlugin(Star):
         logger.info("收到今日运势请求")
         try:
             yield event.make_result().message("正在分析你的运势哦~请稍等~~")
-            # 获取用户ID 和 头像
             user_id = event.get_sender_id()
             avatar = f"https://q4.qlogo.cn/headimg_dl?dst_uin={user_id}&spec=640"
-            # 在json_file_path 中查找是否存在该用户的今日的运势图，如果存在则直接使用， 不存在则生成新的
-            with open(json_file_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                today_date = get_formatted_date()
-                existing_data = [entry for entry in data if entry["user_id"] == user_id and entry["date"] == today_date]
-                if existing_data:
-                    # 如果存在，直接使用
-                    url = existing_data[0]["url"]
-                    logger.info(f"找到已有的运势图: {url}")
-                    # 发送图片
-                    yield event.make_result().file_image(url)
-                else:
-                    # 如果不存在，生成新的
-                    url = await render_html_to_image(generate_fortune_html(user_id, avatar), user_id)
-                    # 将新数据添加到列表中
-                    data.append({"user_id": user_id, "date": today_date, "url": url})
-                    with open(json_file_path, 'w', encoding='utf-8') as f:
-                        json.dump(data, f, ensure_ascii=False, indent=4)
+            today_date = get_formatted_date()
+
+            # 读取数据文件
+            try:
+                with open(json_file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    if not isinstance(data, list):
+                        data = []
+            except (json.JSONDecodeError, FileNotFoundError):
+                data = []
+
+            # 查找现有记录
+            existing_entry = next((entry for entry in data
+                                   if entry["user_id"] == user_id and entry["date"] == today_date), None)
+
+            if existing_entry and os.path.exists(existing_entry["url"]):
+                # 如果存在记录且图片文件存在
+                logger.info(f"找到已有的运势图: {existing_entry['url']}")
+                yield event.make_result().file_image(existing_entry["url"])
+            else:
+                # 生成新的运势图
+                fortune_html = generate_fortune_html(user_id, avatar)
+                image_path = await render_html_to_image(fortune_html, user_id)
+                logger.info(f"生成今日运势图片: {image_path}")
+
+                # 保存记录
+                save_user_fortune_data(user_id, image_path)
+
+                # 发送图片
+                yield event.make_result().file_image(image_path)
+
             logger.info("今日运势请求处理完成")
         except Exception as e:
             logger.error(f"处理今日运势请求时出错: {e}")
-            yield event.make_result().message("生成运势卡片时出错，请稍后再试。")
+            yield event.make_result().message(f"生成运势卡片时出错，请稍后再试: {str(e)}")
