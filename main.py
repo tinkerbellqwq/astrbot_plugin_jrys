@@ -477,22 +477,17 @@ class MyPlugin(Star):
         logger.info("插件销毁完成！")
 
     @filter.command("jrys", alias={'今日运势', '运势'})
-    async def jrys(self, event: AstrMessageEvent) -> MessageEventResult:
+    async def jrys(self, event: AstrMessageEvent):
         """ 今日运势 """
         logger.info("收到今日运势请求")
-        try:
-            yield event.chain_result("正在分析你的运势哦~请稍等~~")
-            # 获取用户ID 和 头像
-            user_id = event.get_sender_id()
-            avatar = f"https://q4.qlogo.cn/headimg_dl?dst_uin={user_id}&spec=640"
-            logger.info(f"用户ID: {user_id}, 头像URL: {avatar}")
-            # 生成今日运势图片
-            html = generate_fortune_html(user_id, avatar)
-            # 发送图片
-            logger.info("生成今日运势图片")
-            url = await self.html_render(html, {})
-            yield event.image_result(url)
-            logger.info("今日运势图片发送成功")
-        except Exception as e:
-            logger.error(f"Error generating fortune image: {e}")
-            yield event.chain_result("生成今日运势图片失败，请稍后再试。")
+        yield event.chain_result("正在分析你的运势哦~请稍等~~")
+        # 获取用户ID 和 头像
+        user_id = event.get_sender_id()
+        avatar = f"https://q4.qlogo.cn/headimg_dl?dst_uin={user_id}&spec=640"
+        # 生成HTML
+        html = generate_fortune_html(user_id, avatar)
+        # 截图并发送
+        url = await self.html_render(html, {})
+        # 发送图片
+        yield event.make_result().url_image(url)
+        logger.info("今日运势请求处理完成")
